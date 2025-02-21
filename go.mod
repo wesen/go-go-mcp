@@ -6,10 +6,10 @@ toolchain go1.23.3
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
-	github.com/go-go-golems/clay v0.1.28
-	github.com/go-go-golems/geppetto v0.4.35
-	github.com/go-go-golems/glazed v0.5.29
-	github.com/go-go-golems/parka v0.5.18
+	github.com/go-go-golems/clay v0.1.31
+	github.com/go-go-golems/geppetto v0.4.37
+	github.com/go-go-golems/glazed v0.5.34
+	github.com/go-go-golems/parka v0.5.20
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hpcloud/tail v1.0.0
@@ -22,6 +22,9 @@ require (
 	github.com/spf13/viper v1.19.0
 	golang.org/x/sync v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
+	gorm.io/datatypes v1.2.5
+	gorm.io/driver/sqlite v1.5.7
+	gorm.io/gorm v1.25.12
 )
 
 require (
@@ -120,8 +123,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gorm.io/datatypes v1.2.5 // indirect
 	gorm.io/driver/mysql v1.5.7 // indirect
-	gorm.io/driver/sqlite v1.5.7 // indirect
-	gorm.io/gorm v1.25.12 // indirect
 )
