@@ -177,16 +177,6 @@ pkg/
   }
   ```
 
-### Integration and Testing
-- [ ] Add unit tests for models and repositories
-- [ ] Add integration tests for database operations
-- [ ] Add performance tests for concurrent logging
-- [ ] Add mock implementations for testing
-- [ ] Test buffer overflow scenarios
-- [ ] Test flush interval behavior
-- [ ] Test error handling and recovery
-- [ ] Test different database backends
-
 ## Notes
 - Implement context cancellation for long-running queries
 - Use prepared statements for better performance

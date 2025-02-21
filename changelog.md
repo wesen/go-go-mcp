@@ -1393,3 +1393,11 @@ Added core database models for logging tool calls:
 - Created ToolCall model with GORM support for storing tool invocation records
 - Added filter types and utilities for querying tool call records
 - Implemented builder pattern for constructing filters
+
+Database Logger Implementation
+Added a robust database logger middleware that implements the LoggerMiddleware interface. The implementation includes:
+- Buffered asynchronous logging with configurable buffer size and flush interval
+- Comprehensive tool call recording including arguments, results, and timing
+- Graceful shutdown and error handling
+- Session and profile ID context support
+- Batch processing for improved performance
