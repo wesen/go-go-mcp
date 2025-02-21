@@ -2,14 +2,280 @@
 
 This tutorial explains how to use the MCP database layer for tool call logging. We'll cover everything from basic setup to advanced usage patterns.
 
+## What is GORM and Why Do We Use It?
+
+[GORM](https://gorm.io) is the most widely-used Object-Relational Mapping (ORM) library for Go, and it's the foundation of MCP's database layer. Think of GORM as a smart translator between your Go code and your database - it handles all the complex SQL operations behind the scenes while letting you work with familiar Go structs.
+
+### The Power of GORM
+
+GORM makes database operations feel natural in Go. Instead of writing raw SQL like:
+```sql
+INSERT INTO tool_calls (tool_name, status, created_at) VALUES ('example', 'running', CURRENT_TIMESTAMP);
+```
+
+You can write Go code that's type-safe and intuitive:
+```go
+toolCall := &models.ToolCall{
+    ToolName: "example",
+    Status:   "running",
+}
+db.Create(toolCall) // GORM handles the rest!
+```
+
+But GORM is more than just a convenience layer. It provides:
+
+1. **Smart Schema Management**: Through [Auto Migration](https://gorm.io/docs/migration.html), GORM can automatically create and update your database schema based on your Go structs. It's like having a database admin who automatically keeps your tables in sync with your code.
+
+2. **Type Safety**: No more string concatenation for SQL queries or type conversion headaches. GORM understands Go types and handles the mapping to database types automatically.
+
+3. **Hooks and Callbacks**: Want to automatically set timestamps, validate data, or trigger events before/after database operations? GORM's [hooks system](https://gorm.io/docs/hooks.html) has you covered.
+
+4. **Powerful Query Interface**: From simple CRUD to complex joins and transactions, GORM provides an expressive API that makes database queries feel like natural Go operations.
+
+### How MCP Uses GORM
+
+In MCP, we've built a robust database layer around GORM that follows best practices and provides a clean, maintainable architecture:
+
+1. **Model-Driven Design**: Our database schema is defined through Go structs with GORM tags, making it self-documenting and type-safe. For example, our `ToolCall` model clearly shows what data we store and how it's indexed.
+
+2. **Repository Pattern**: Instead of using GORM directly throughout the codebase, we encapsulate all database operations behind a clean repository interface. This makes our code more testable and maintainable.
+
+3. **Automatic Migrations**: During development, GORM's AutoMigrate feature keeps our database schema in sync with our code, making it easy to iterate and evolve our data model.
+
+4. **Connection Management**: GORM handles connection pooling, reconnection, and other low-level database concerns, letting us focus on business logic.
+
+### Real-World Benefits
+
+This architecture has several practical advantages:
+
+1. **Development Speed**: Adding new fields to our models automatically updates the database schema - no manual migrations needed during development.
+
+2. **Type Safety**: The Go compiler catches many potential errors before they hit production, thanks to our type-safe repository interface.
+
+3. **Maintainability**: By abstracting database operations behind a clean interface, we can change our database implementation without affecting the rest of the codebase.
+
+4. **Performance**: GORM's connection pooling and efficient query building help maintain good performance under load.
+
+Let's dive deeper into how this all works in practice...
+
 ## Overview
 
-The MCP database layer is built on top of GORM (Go Object Relational Mapper) and provides a clean, type-safe way to store and retrieve tool call records. The architecture consists of several layers:
+The MCP database layer is built on top of GORM and provides a clean, type-safe way to store and retrieve tool call records. The architecture consists of several layers:
 
 1. **Models**: Define the database schema using Go structs
 2. **Repository**: Provides a clean interface for data access
 3. **GORM Implementation**: Implements the repository interface using GORM
 4. **Database Factory**: Handles database connection and configuration
+
+## Understanding db.go and GORM Integration
+
+The `db.go` file is the core of our database initialization and configuration. Let's break down how it works with GORM:
+
+### Database Configuration
+
+```go
+type DatabaseConfig struct {
+    // Driver specifies the database type (currently only "sqlite" is supported)
+    Driver string `json:"driver" yaml:"driver"`
+
+    // DSN is the data source name (connection string)
+    // For SQLite, this is the path to the database file
+    DSN string `json:"dsn" yaml:"dsn"`
+
+    // Debug enables GORM debug mode with detailed logging
+    Debug bool `json:"debug" yaml:"debug"`
+
+    // Options contains driver-specific options
+    Options map[string]interface{} `json:"options" yaml:"options"`
+}
+```
+
+The `DatabaseConfig` struct provides a flexible way to configure database connections. Currently, it supports SQLite, but the structure is designed to be extensible for other database types in the future.
+
+### Database Initialization Flow
+
+Let's walk through how `NewDatabase` works:
+
+1. **Dialector Selection**:
+   ```go
+   var dialector g.Dialector
+   switch config.Driver {
+   case "sqlite":
+       dialector = sqlite.Open(config.DSN)
+   default:
+       return nil, fmt.Errorf("unsupported database driver: %s", config.Driver)
+   }
+   ```
+   - A dialector is GORM's way of handling different database types
+   - Currently only SQLite is supported, but adding new drivers is straightforward
+
+2. **GORM Configuration**:
+   ```go
+   gormConfig := &g.Config{}
+   if config.Debug {
+       gormConfig.Logger = logger.Default.LogMode(logger.Info)
+   }
+   ```
+   - Debug mode enables SQL query logging
+   - GORM's logger helps with development and troubleshooting
+
+3. **Database Connection**:
+   ```go
+   db, err := g.Open(dialector, gormConfig)
+   if err != nil {
+       return nil, errors.Wrap(err, "failed to open database connection")
+   }
+   ```
+   - Opens the database connection using the configured dialector
+   - Returns a GORM DB instance that manages the connection pool
+
+4. **Auto-Migration**:
+   ```go
+   if err := db.AutoMigrate(&models.ToolCall{}); err != nil {
+       return nil, errors.Wrap(err, "failed to migrate database schema")
+   }
+   ```
+   - GORM's AutoMigrate automatically creates or updates database tables
+   - It reads the struct definitions and their GORM tags
+   - Creates tables, adds missing columns, and updates column types
+   - Never deletes existing columns or data
+
+### Understanding AutoMigrate
+
+GORM's AutoMigrate is a powerful feature that handles database schema management. Here's what it does when you call `db.AutoMigrate(&models.ToolCall{})`:
+
+1. **Table Creation**:
+   - If the table doesn't exist, creates it based on the struct
+   - Table name is derived from struct name (snake_case)
+
+2. **Column Management**:
+   - Creates columns for each struct field
+   - Uses GORM tags to determine:
+     - Column types
+     - Constraints
+     - Indexes
+     - Default values
+
+3. **Safe Schema Updates**:
+   - Adds new columns if they exist in the struct but not in the database
+   - Updates column types if they've changed in the struct
+   - Preserves existing data
+   - Never removes columns (even if they're removed from the struct)
+
+Example of how GORM maps our `ToolCall` struct:
+
+```go
+type ToolCall struct {
+    ID        uint           `gorm:"primarykey"`       // Creates INTEGER PRIMARY KEY
+    CreatedAt time.Time                               // DATETIME column
+    UpdatedAt time.Time                               // DATETIME column
+    DeletedAt gorm.DeletedAt `gorm:"index"`           // Adds index for soft deletes
+    
+    ToolName  string         `gorm:"index;size:255"`  // VARCHAR(255) with index
+    ToolType  string         `gorm:"index"`           // Creates index
+    Arguments datatypes.JSON `gorm:"type:json"`       // JSON column type
+    // ... other fields
+}
+```
+
+This results in SQL like:
+```sql
+CREATE TABLE tool_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at DATETIME,
+    updated_at DATETIME,
+    deleted_at DATETIME,
+    tool_name VARCHAR(255),
+    tool_type VARCHAR(255),
+    arguments JSON,
+    -- ... other columns
+    INDEX idx_tool_calls_deleted_at (deleted_at),
+    INDEX idx_tool_calls_tool_name (tool_name),
+    INDEX idx_tool_calls_tool_type (tool_type)
+);
+```
+
+### Repository Pattern Integration
+
+After database initialization, we create a repository instance:
+
+```go
+func NewRepository(db *g.DB) repository.ToolCallRepository {
+    return gorm.NewGormRepository(db)
+}
+```
+
+The repository pattern provides a clean interface for database operations:
+- Abstracts GORM implementation details
+- Makes testing easier (can mock the repository)
+- Provides type-safe methods for common operations
+
+### Complete Initialization
+
+The `InitializeDatabase` function ties everything together:
+
+```go
+func InitializeDatabase(config DatabaseConfig) (repository.ToolCallRepository, error) {
+    db, err := NewDatabase(config)
+    if err != nil {
+        return nil, err
+    }
+    return NewRepository(db), nil
+}
+```
+
+This gives you a ready-to-use repository with:
+- Configured database connection
+- Migrated schema
+- Connection pool management
+- Query logging (if debug enabled)
+
+### Best Practices
+
+1. **Configuration**:
+   - Always provide a DSN appropriate for your environment
+   - Enable debug mode during development
+   - Use Options map for driver-specific settings
+
+2. **Schema Management**:
+   - Let AutoMigrate handle schema updates in development
+   - Use manual migrations in production
+   - Keep struct tags up to date
+
+3. **Connection Management**:
+   - GORM handles the connection pool
+   - No need to manually close connections
+   - Use context for query timeouts
+
+4. **Error Handling**:
+   - Check initialization errors
+   - Use wrapped errors for better context
+   - Monitor migration success
+
+Example usage with best practices:
+
+```go
+func initializeWithBestPractices() (*repository.ToolCallRepository, error) {
+    config := DatabaseConfig{
+        Driver: "sqlite",
+        DSN:    "file:tool_calls.db?cache=shared&mode=rwc",
+        Debug:  true,
+        Options: map[string]interface{}{
+            "pragma": map[string]string{
+                "journal_mode": "WAL",
+                "busy_timeout": "5000",
+            },
+        },
+    }
+
+    repo, err := InitializeDatabase(config)
+    if err != nil {
+        return nil, fmt.Errorf("failed to initialize database: %w", err)
+    }
+
+    return repo, nil
+}
+```
 
 ## Database Initialization and Migrations
 
