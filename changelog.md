@@ -1339,11 +1339,25 @@ Replaced fmt.Printf statements with structured logging using zerolog.Debug() in 
 - Updated logging in command index creation and search operations
 - Improved logging in path filtering operations with structured fields
 
-## Tool Provider Middleware Implementation
+## Tool Provider Middleware Documentation
 
-Implemented a flexible middleware system for tool providers with builder pattern and abstracted metrics collection.
+Added comprehensive documentation for tool provider middleware system:
+- Added detailed guide on using and creating middleware
+- Included examples for logging and metrics middleware
+- Added best practices and advanced topics
+- Created step-by-step guide for custom middleware creation
 
-- Removed global middleware configuration in favor of per-middleware builders
-- Created metrics collector interface for pluggable metrics implementations
-- Implemented logging middleware with configurable options
-- Added NoopMetricsCollector as default metrics implementation
+## SQLite Middleware Implementation Plan
+
+Added detailed implementation plan for SQLite-based tool call logging:
+- Added SQLite middleware design with builder pattern
+- Added async log recording with buffering
+- Added performance considerations and testing strategy
+- Added example usage with configuration options
+
+## Database Models for Tool Call Logging
+
+Added core database models for logging tool calls:
+- Created ToolCall model with GORM support for storing tool invocation records
+- Added filter types and utilities for querying tool call records
+- Implemented builder pattern for constructing filters

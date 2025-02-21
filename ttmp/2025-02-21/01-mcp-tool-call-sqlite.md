@@ -1,48 +1,60 @@
-# MCP Tool Call SQLite Logger Implementation Plan
+# MCP Tool Call Database Logger Implementation Plan
 
 ## Overview
-Implement a SQLite-based logging system for MCP tool calls with filtering capabilities and a repository layer for web UI integration.
+Implement a database-agnostic logging system for MCP tool calls with pluggable storage backends, starting with SQLite support.
 
 ## Directory Structure
 ```
 pkg/
   db/
     models/
-      tool_call.go       # Core model definitions
-      filters.go         # Filter types and utilities
+      tool_call.go       # Core model definitions ✓
+      filters.go         # Filter types and utilities ✓
     repository/
-      tool_call.go       # GORM repository implementation
-      queries.go         # Complex query builders
+      interface.go       # Repository interface definitions
+      gorm/
+        tool_call.go     # GORM-based repository implementation
+        queries.go       # GORM query builders
     migrations/
       001_create_tool_calls.go
-    db.go               # Database connection and setup
+    db.go               # Database interface and factory
   logging/
-    middleware.go       # Tool call logging middleware
-    recorder.go        # Async log recording utilities
+    middleware/
+      interface.go      # Middleware interface definitions
+      db_logger.go      # Database logging middleware
+      builder.go        # Builder interface and implementation
+    recorder/
+      interface.go      # Recorder interface definitions
+      db/
+        recorder.go     # Database recorder implementation
 ```
 
 ## Implementation Tasks
 
-### Database Models and Setup
-- [ ] Create `pkg/db/models/tool_call.go`:
+### Core Database Models ✓
+- [x] Create `pkg/db/models/tool_call.go`:
   ```go
   type ToolCall struct {
-      gorm.Model
+      ID          uint           `gorm:"primarykey"`
+      CreatedAt   time.Time
+      UpdatedAt   time.Time
+      DeletedAt   gorm.DeletedAt `gorm:"index"`
+      
       ToolName    string
       ToolType    string
-      Arguments   datatypes.JSON  // Using GORM JSON type
+      Arguments   datatypes.JSON  
       Output      string         
       StartTime   time.Time
       EndTime     time.Time
       Duration    time.Duration
       SessionID   string         `gorm:"index"`
       ProfileID   string         `gorm:"index"`
-      Status      string         // pending, running, completed, error
-      Error       string         // Stores error message if any
+      Status      string         
+      Error       string         
   }
   ```
 
-- [ ] Create `pkg/db/models/filters.go`:
+- [x] Create `pkg/db/models/filters.go`:
   ```go
   type ToolCallFilter struct {
       ToolName    *string
@@ -74,54 +86,243 @@ pkg/
       Create(ctx context.Context, call *models.ToolCall) error
       Update(ctx context.Context, call *models.ToolCall) error
       GetByID(ctx context.Context, id uint) (*models.ToolCall, error)
+      
+      // Query operations
       List(ctx context.Context, filter *models.ToolCallFilter) ([]*models.ToolCall, error)
       GetRunning(ctx context.Context) ([]*models.ToolCall, error)
       GetStats(ctx context.Context) (*ToolCallStats, error)
+      
+      // Maintenance operations
+      Cleanup(ctx context.Context, before time.Time) error
+      Vacuum(ctx context.Context) error
+  }
+
+  // Factory for creating repositories
+  type RepositoryFactory interface {
+      NewRepository(config map[string]interface{}) (Repository, error)
   }
   ```
 
-- [ ] Create `pkg/db/repository/queries.go`:
+### GORM Implementation
+- [ ] Create `pkg/db/repository/gorm/tool_call.go`:
   ```go
-  // Implement query builders for complex filters
-  type QueryBuilder interface {
-      WithToolName(name string) QueryBuilder
-      WithTimeRange(start, end time.Time) QueryBuilder
-      WithStatus(status string) QueryBuilder
-      WithPagination(page, pageSize int) QueryBuilder
-      Build() *gorm.DB
+  type GormRepository struct {
+      db *gorm.DB
+      queryBuilder *QueryBuilder
+  }
+
+  func NewGormRepository(db *gorm.DB) *GormRepository {
+      return &GormRepository{
+          db: db,
+          queryBuilder: NewQueryBuilder(),
+      }
+  }
+
+  // Implement Repository interface methods...
+  ```
+
+### Logging Middleware Interface
+- [ ] Create `pkg/logging/middleware/interface.go`:
+  ```go
+  type LoggerMiddleware interface {
+      pkg.ToolProvider
+      Flush() error
+      Close() error
+  }
+
+  type LoggerBuilder interface {
+      WithRepository(repo repository.Repository) LoggerBuilder
+      WithBufferSize(size int) LoggerBuilder
+      WithFlushInterval(d time.Duration) LoggerBuilder
+      WithErrorHandler(handler func(error)) LoggerBuilder
+      Build() middlewares.ToolProviderMiddleware
   }
   ```
 
-### Logging Middleware
-- [ ] Create `pkg/logging/middleware.go`:
+### Database Logger Implementation
+- [ ] Create `pkg/logging/middleware/db_logger.go`:
   ```go
-  type ToolCallLogger interface {
-      Start(ctx context.Context, toolName, toolType string, args interface{}) (context.Context, error)
-      Complete(ctx context.Context, output string) error
-      Error(ctx context.Context, err error) error
+  type dbLoggerProvider struct {
+      next pkg.ToolProvider
+      recorder recorder.Recorder
+  }
+
+  func (d *dbLoggerProvider) CallTool(ctx context.Context, name string, arguments map[string]interface{}) (*protocol.ToolResult, error) {
+      call := &models.ToolCall{
+          ToolName: name,
+          Arguments: arguments,
+          StartTime: time.Now(),
+          Status: "running",
+      }
+
+      // Extract metadata from context
+      d.enrichCallWithMetadata(ctx, call)
+
+      // Record start
+      if err := d.recorder.Record(call); err != nil {
+          log.Error().Err(err).Msg("Failed to record tool call start")
+      }
+
+      // Call next provider
+      result, err := d.next.CallTool(ctx, name, arguments)
+
+      // Update and record completion
+      d.updateCallWithResult(call, result, err)
+      if recordErr := d.recorder.Record(call); recordErr != nil {
+          log.Error().Err(recordErr).Msg("Failed to record tool call completion")
+      }
+
+      return result, err
   }
   ```
 
-- [ ] Create `pkg/logging/recorder.go`:
+### Database Recorder Interface
+- [ ] Create `pkg/logging/recorder/interface.go`:
   ```go
-  // Async log recording to avoid blocking tool execution
-  type LogRecorder interface {
+  type Recorder interface {
       Record(call *models.ToolCall) error
       Flush() error
+      Close() error
+  }
+
+  type RecorderFactory interface {
+      NewRecorder(repo repository.Repository, config RecorderConfig) (Recorder, error)
+  }
+
+  type RecorderConfig struct {
+      BufferSize     int
+      FlushInterval  time.Duration
+      ErrorHandler   func(error)
   }
   ```
 
-### Database Setup
-- [ ] Create `pkg/db/db.go`:
+### Database Recorder Implementation
+- [ ] Create `pkg/logging/recorder/db/recorder.go`:
   ```go
-  // Database connection management
-  type DBManager interface {
-      Connect() error
-      Close() error
-      AutoMigrate() error
-      GetDB() *gorm.DB
+  type dbRecorder struct {
+      repo       repository.Repository
+      buffer     chan *models.ToolCall
+      config     RecorderConfig
+      done       chan struct{}
+      closeOnce  sync.Once
+  }
+
+  func NewDBRecorder(repo repository.Repository, config RecorderConfig) *dbRecorder {
+      r := &dbRecorder{
+          repo:   repo,
+          buffer: make(chan *models.ToolCall, config.BufferSize),
+          config: config,
+          done:   make(chan struct{}),
+      }
+      
+      go r.flushLoop()
+      return r
+  }
+
+  func (r *dbRecorder) Record(call *models.ToolCall) error {
+      select {
+      case r.buffer <- call:
+          return nil
+      default:
+          // Buffer full, flush synchronously
+          return r.repo.Create(context.Background(), call)
+      }
+  }
+
+  func (r *dbRecorder) flushLoop() {
+      ticker := time.NewTicker(r.config.FlushInterval)
+      defer ticker.Stop()
+
+      batch := make([]*models.ToolCall, 0, r.config.BufferSize)
+      
+      for {
+          select {
+          case <-r.done:
+              return
+          case call := <-r.buffer:
+              batch = append(batch, call)
+              if len(batch) >= r.config.BufferSize {
+                  r.flushBatch(batch)
+                  batch = batch[:0]
+              }
+          case <-ticker.C:
+              if len(batch) > 0 {
+                  r.flushBatch(batch)
+                  batch = batch[:0]
+              }
+          }
+      }
+  }
+
+  func (r *dbRecorder) flushBatch(batch []*models.ToolCall) {
+      ctx := context.Background()
+      for _, call := range batch {
+          if err := r.repo.Create(ctx, call); err != nil && r.config.ErrorHandler != nil {
+              r.config.ErrorHandler(err)
+          }
+      }
   }
   ```
+
+### Builder Implementation
+- [ ] Create `pkg/logging/middleware/builder.go`:
+  ```go
+  type dbLoggerBuilder struct {
+      repo          repository.Repository
+      recorderConfig recorder.RecorderConfig
+  }
+
+  func NewDBLoggerBuilder() *dbLoggerBuilder {
+      return &dbLoggerBuilder{
+          recorderConfig: recorder.RecorderConfig{
+              BufferSize:    100,
+              FlushInterval: 5 * time.Second,
+          },
+      }
+  }
+
+  func (b *dbLoggerBuilder) WithRepository(repo repository.Repository) LoggerBuilder {
+      b.repo = repo
+      return b
+  }
+
+  func (b *dbLoggerBuilder) Build() middlewares.ToolProviderMiddleware {
+      recorder := recorder.NewDBRecorder(b.repo, b.recorderConfig)
+      
+      return func(next pkg.ToolProvider) pkg.ToolProvider {
+          return &dbLoggerProvider{
+              next: next,
+              recorder: recorder,
+          }
+      }
+  }
+  ```
+
+### Usage Example
+
+```go
+// Create a SQLite repository
+config := map[string]interface{}{
+    "driver": "sqlite",
+    "dsn": "logs/tools.db",
+}
+repo, err := repository.NewRepository(config)
+if err != nil {
+    log.Fatal().Err(err).Msg("Failed to create repository")
+}
+
+// Create a tool provider with database logging
+provider := NewChainBuilder().
+    With(NewDBLoggerBuilder().
+        WithRepository(repo).
+        WithBufferSize(200).
+        WithFlushInterval(10 * time.Second).
+        WithErrorHandler(func(err error) {
+            log.Error().Err(err).Msg("Database logging error")
+        }).
+        Build()).
+    Build(baseProvider)
+```
 
 ### Integration Points
 - [ ] Add logging middleware to tool execution pipeline
@@ -130,21 +331,23 @@ pkg/
 - [ ] Create metrics collection for tool usage statistics
 
 ### Performance Considerations
-- [ ] Implement connection pooling
+- [ ] Use buffered channels for async logging
+- [ ] Implement batched inserts for better performance
 - [ ] Add indexes for frequent queries
-- [ ] Implement query result caching
-- [ ] Handle large output storage efficiently
 
 ### Testing
 - [ ] Unit tests for models and repositories
 - [ ] Integration tests for database operations
 - [ ] Performance tests for concurrent logging
 - [ ] Mock implementations for testing
+- [ ] Test buffer overflow scenarios
+- [ ] Test flush interval behavior
+- [ ] Test error handling and recovery
+- [ ] Test different database backends
 
 ## Notes
-- Use GORM's hooks for automatic timestamp management
 - Implement context cancellation for long-running queries
-- Consider implementing soft deletes
-- Add proper error wrapping and logging
-- Implement connection retry logic
-- Consider implementing query timeout mechanisms
+- Use prepared statements for better performance
+- Implement periodic vacuum for database maintenance
+- Consider implementing log rotation by date
+- Consider adding support for other databases (PostgreSQL, MySQL)
