@@ -11,9 +11,140 @@ The MCP database layer is built on top of GORM (Go Object Relational Mapper) and
 3. **GORM Implementation**: Implements the repository interface using GORM
 4. **Database Factory**: Handles database connection and configuration
 
+## Database Initialization and Migrations
+
+GORM handles database schema management through its AutoMigrate feature, which automatically creates or updates tables based on your model definitions. The MCP database layer encapsulates this in the `NewDatabase` function.
+
+### Basic Initialization
+
+Here's the simplest way to initialize the database:
+
+```go
+package main
+
+import (
+    "github.com/go-go-golems/go-go-mcp/pkg/db"
+)
+
+func main() {
+    // Create database configuration
+    config := db.DatabaseConfig{
+        Driver: "sqlite",            // Currently only SQLite is supported
+        DSN:    "tool_calls.db",    // Database file path
+        Debug:  true,               // Enable SQL query logging
+    }
+
+    // Initialize database and repository in one step
+    repo, err := db.InitializeDatabase(config)
+    if err != nil {
+        log.Fatal().Err(err).Msg("Failed to initialize database")
+    }
+
+    // The database is now ready to use
+    // Tables are automatically created/updated
+}
+```
+
+### What Happens During Initialization
+
+1. **Connection Setup**:
+   ```go
+   // Inside pkg/db/db.go
+   db, err := gorm.Open(dialector, gormConfig)
+   ```
+
+2. **Auto-Migration**:
+   ```go
+   // This creates/updates tables for all registered models
+   if err := db.AutoMigrate(&models.ToolCall{}); err != nil {
+       return nil, errors.Wrap(err, "failed to migrate database schema")
+   }
+   ```
+
+3. **Repository Creation**:
+   ```go
+   // Creates a repository instance with the initialized database
+   repo := gorm.NewGormRepository(db)
+   ```
+
+### Understanding Auto-Migration
+
+GORM's AutoMigrate:
+- Creates tables if they don't exist
+- Adds missing columns
+- Updates column types if changed
+- Creates indexes defined in model tags
+- Never deletes columns or indexes
+
+Example of how model tags affect the schema:
+```go
+type ToolCall struct {
+    ID        uint           `gorm:"primarykey"`       // Creates primary key
+    CreatedAt time.Time                               // Automatic timestamps
+    UpdatedAt time.Time
+    DeletedAt gorm.DeletedAt `gorm:"index"`           // Adds index for soft deletes
+    
+    ToolName  string         `gorm:"index;size:255"`  // Creates index, sets column size
+    Arguments datatypes.JSON `gorm:"type:json"`       // Uses JSON column type
+    // ... other fields
+}
+```
+
+### Manual Schema Management
+
+While auto-migration is convenient for development, you might want more control in production:
+
+```go
+func initializeWithManualMigration(config db.DatabaseConfig) error {
+    // Get raw database connection
+    gormDB, err := db.NewDatabase(config)
+    if err != nil {
+        return err
+    }
+
+    // Get underlying SQL database
+    sqlDB, err := gormDB.DB()
+    if err != nil {
+        return err
+    }
+
+    // Perform manual migrations if needed
+    if err := runMigrations(sqlDB); err != nil {
+        return err
+    }
+
+    // Create repository
+    repo := gorm.NewGormRepository(gormDB)
+    return nil
+}
+
+func runMigrations(db *sql.DB) error {
+    migrations := []string{
+        `CREATE TABLE IF NOT EXISTS tool_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at DATETIME,
+            updated_at DATETIME,
+            deleted_at DATETIME,
+            tool_name TEXT,
+            arguments JSON,
+            -- ... other columns
+            INDEX idx_tool_name (tool_name)
+        )`,
+        // Add more migration statements
+    }
+
+    for _, migration := range migrations {
+        if _, err := db.Exec(migration); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+```
+
 ## Quick Start
 
-Here's a minimal example to get you started:
+Now that we understand initialization, here's a complete example:
 
 ```go
 package main
@@ -24,14 +155,15 @@ import (
     "time"
 
     "github.com/go-go-golems/go-go-mcp/pkg/db"
+    "github.com/go-go-golems/go-go-mcp/pkg/db/models"
 )
 
 func main() {
-    // Initialize the database
+    // 1. Initialize database
     config := db.DatabaseConfig{
         Driver: "sqlite",
-        DSN:    "tool_calls.db", // Will be created in current directory
-        Debug:  true,            // Enable GORM debug logging
+        DSN:    "tool_calls.db",
+        Debug:  true,
     }
 
     repo, err := db.InitializeDatabase(config)
@@ -39,7 +171,7 @@ func main() {
         log.Fatalf("Failed to initialize database: %v", err)
     }
 
-    // Create a new tool call record
+    // 2. Create a new tool call record
     call := &models.ToolCall{
         ToolName:  "example-tool",
         ToolType:  "shell",
@@ -49,9 +181,24 @@ func main() {
         SessionID: "session-123",
     }
 
+    // 3. Store the record
     ctx := context.Background()
     if err := repo.Create(ctx, call); err != nil {
         log.Fatalf("Failed to create tool call: %v", err)
+    }
+
+    // 4. Query the record
+    filter := models.NewToolCallFilter().
+        WithToolName("example-tool").
+        WithStatus("running")
+
+    calls, err := repo.List(ctx, filter)
+    if err != nil {
+        log.Fatalf("Failed to query tool calls: %v", err)
+    }
+
+    for _, c := range calls {
+        log.Printf("Found tool call: %s (status: %s)", c.ToolName, c.Status)
     }
 }
 ```
