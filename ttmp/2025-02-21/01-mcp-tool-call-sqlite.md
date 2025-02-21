@@ -17,7 +17,7 @@ pkg/
         queries.go       # GORM query builders ✓
     migrations/
       001_create_tool_calls.go
-    db.go               # Database interface and factory
+    db.go               # Database interface and factory ✓
   logging/
     middleware/
       interface.go      # Middleware interface definitions
@@ -113,8 +113,8 @@ pkg/
   }
   ```
 
-### Database Factory and Migrations
-- [ ] Create `pkg/db/db.go`:
+### Database Factory and Migrations ✓
+- [x] Create `pkg/db/db.go`:
   ```go
   type DatabaseConfig struct {
       Driver   string
@@ -125,10 +125,7 @@ pkg/
   func NewDatabase(config DatabaseConfig) (*gorm.DB, error)
   ```
 
-- [ ] Create `pkg/db/migrations/001_create_tool_calls.go`:
-  ```go
-  func Migrate(db *gorm.DB) error
-  ```
+- [x] Create migrations (using GORM auto-migrate)
 
 ### Logging Middleware
 - [ ] Create `pkg/logging/middleware/interface.go`:

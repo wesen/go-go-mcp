@@ -1369,3 +1369,27 @@ Added repository layer for tool call logging:
 - Implemented GORM-based repository with SQLite support
 - Added query builder for complex query construction
 - Added support for filtering, pagination, and maintenance operations
+
+## Database Factory and Documentation
+
+Added database factory and comprehensive documentation:
+- Created DatabaseConfig type for flexible database configuration
+- Added NewDatabase function with GORM initialization
+- Added helper functions for repository creation
+- Created detailed tutorial with examples and best practices
+- Added SQLite support with auto-migrations
+
+## Repository Layer for Tool Call Logging
+
+Added repository layer for tool call logging:
+- Created ToolCallRepository interface with comprehensive data access methods
+- Implemented GORM-based repository with SQLite support
+- Added query builder for complex query construction
+- Added support for filtering, pagination, and maintenance operations
+
+## Database Models for Tool Call Logging
+
+Added core database models for logging tool calls:
+- Created ToolCall model with GORM support for storing tool invocation records
+- Added filter types and utilities for querying tool call records
+- Implemented builder pattern for constructing filters
