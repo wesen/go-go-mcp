@@ -1123,3 +1123,227 @@ Added helper functions for converting between string and JSON-RPC ID types:
 - Added StringToID to convert string to json.RawMessage
 - Added IDToString to convert json.RawMessage to string
 - Improved type safety in ID handling across transports
+
+# Multi-Loader Support for Command Loading
+
+Added support for multiple command loaders through a new MultiLoader type that can dispatch to different loaders based on the command type field.
+
+- Added new MultiLoader type that implements CommandLoader interface
+- Added support for registering multiple loaders by command type
+- Added BaseCommand structure for type determination
+
+# Default Loader Support for MultiLoader
+
+Enhanced the MultiLoader to support a default loader for files without a Type field or when type-specific loaders are not available.
+
+- Added defaultLoader field to MultiLoader struct
+- Added SetDefaultLoader method for configuring default loader
+- Modified LoadCommands to fall back to default loader when appropriate
+- Updated IsFileSupported to check default loader support
+
+# Enhanced MultiLoader File Support
+
+Improved MultiLoader to try all registered loaders when no type-specific loader is found.
+
+- Added findSupportedLoader helper to check all registered loaders
+- Updated LoadCommands to try all loaders when type-specific loader is not found
+- Updated IsFileSupported to check all loaders when type or default loader don't match
+- Improved error messages to indicate when no loader supports a file
+
+# MultiLoader Documentation
+
+Added comprehensive documentation for the MultiLoader feature:
+- Added new topic explaining MultiLoader usage and configuration
+- Included examples and best practices
+- Added common patterns and implementation guidelines
+
+## Implement ListTools for Repository
+
+Added ListTools method to Repository to support the ToolProvider interface. Tools are created from commands with names constructed from their parent path.
+
+- ✨ Implemented ListTools method on Repository that converts commands to tools
+
+## MCP Tools List Command Refactoring
+
+Improved the MCP tools list command implementation by using a dedicated command structure.
+
+- Refactored MCP commands to use a dedicated McpCommands struct
+- Removed context-based repository access in favor of direct dependency injection
+- Improved code organization and maintainability
+
+# Repository Interface and Multi-Repository Implementation
+
+Updated path handling for root-mounted repositories.
+
+- Modified ListTools to not add leading slash for root-mounted repositories
+- Updated CollectCommands to handle root mount path stripping
+- Added tests for root vs non-root mount path handling
+- Improved path handling consistency across operations
+
+## Unit Tests for TrieNode
+
+Added comprehensive unit tests for the TrieNode implementation, covering basic node operations and command operations. Tests include edge cases and verify correct behavior for command insertion, finding, and removal.
+
+## Additional TrieNode Unit Tests
+
+Added comprehensive tests for command collection and node operations:
+- Added tests for collecting commands with and without recursion
+- Added tests for node insertion at different depths
+- Added tests for render node conversion and sorting
+
+## Edge Case Tests for TrieNode
+
+Added comprehensive edge case tests for the TrieNode implementation:
+- Added tests for nil node handling
+- Added tests for deeply nested structures
+- Added tests for large command sets
+- Added tests for empty prefix handling
+- Added tests for concurrent operations
+
+# Repository Documentation Update
+
+Added comprehensive documentation for the repository interface.
+
+- Added detailed interface method descriptions
+- Added implementation examples and guidelines
+- Added core operations overview
+- Added custom repository implementation guide
+
+# Repository Interface Enhancement
+
+Added Watch method to the RepositoryInterface and implemented it in MultiRepository to support file system watching across all mounted repositories.
+
+- Added Watch method to RepositoryInterface
+- Implemented Watch in MultiRepository with concurrent watching of all mounted repositories
+
+# Command Repository
+
+Added a simple in-memory command repository that allows organizing commands in a hierarchy without file system dependencies. This provides a lightweight alternative to the full Repository when only command organization is needed.
+
+- Added CommandRepository type with basic command management functionality
+- Supports adding commands under specific paths
+- Implements full RepositoryInterface
+- No file system or watching dependencies
+
+## Extract Common Sqleton Middlewares
+
+Created a new helper method `GetSqletonMiddlewares` to extract common middleware logic from `GetCobraCommandSqletonMiddlewares`. This improves code reusability and makes it easier to use the same middleware chain in different contexts.
+
+- Created `GetSqletonMiddlewares` function that handles profile loading, viper configuration, and defaults
+- Refactored `GetCobraCommandSqletonMiddlewares` to use the new helper method
+
+## Convert MCP List Tools to Glazed Command
+
+Converted the MCP tools list command to use the glazed framework for better structured data output and consistent command line interface.
+
+- Created ListToolsCommand as a GlazeCommand for structured output
+- Added repository filter flag
+- Improved output formatting with proper field names
+- Added support for all glazed output options (JSON, YAML, etc.)
+
+## Customize MCP List Tools Command Output
+
+Enhanced the MCP tools list command with custom middleware configuration:
+- Added manual middleware setup instead of using BuildCobraCommandWithSqletonMiddlewares
+- Set default output format to YAML for better readability
+- Maintained sqleton middleware chain and help layers
+- Added profile settings support
+
+## Add MCP Run Command Structure
+
+Added a new `run` command to execute tools by name:
+- Created RunCommand with name, args and args-from-file parameters
+- Added settings struct for run command parameters
+- Set up middleware chain matching list command
+- Added command to MCP command structure
+
+## Refactor MCP Command Middleware Creation
+
+Extracted common middleware creation logic into a shared function:
+- Created createCommandMiddlewares function for reuse across commands
+- Added support for optional output override middleware
+- Improved code organization and reduced duplication
+
+## Implement MCP Run Command
+
+Added implementation for the run command to execute tools:
+- Added tool lookup across repositories
+- Added argument parsing and merging from string and file sources
+- Added JSON schema to parameter layer conversion
+- Added support for running tools with parsed arguments
+- Added comprehensive error handling and validation
+
+# Add schema command to MCP tools
+
+Added a new `schema` command to the MCP tools that outputs the JSON schema for a specified tool. This helps users understand the structure and requirements of tool parameters.
+
+- Added `schema` subcommand to `tools` that takes a tool name and outputs its JSON schema
+
+# Make ConfigEditor Reusable Across Applications
+
+Improved the ConfigEditor to be more reusable by allowing configuration with app name and optional config path.
+
+- Added `NewAppConfigEditor` constructor that takes an app name and optional config path
+- Updated `GetDefaultConfigPath` to take an app name parameter
+- Maintained backward compatibility with existing `NewConfigEditor` function
+
+# Update Sqleton to Use Glazed Config Editor
+
+Updated sqleton to use the new config editor from glazed package:
+- Switched to using NewAppConfigEditor from glazed/pkg/config
+- Configured with "sqleton" as app name for proper config file location
+
+# Update Pinocchio to Use New Config Editor
+
+Updated pinocchio to use the new config editor with app name parameter:
+- Updated getEditor to use "pinocchio" as app name for default config path
+- Updated edit command to use app name for default config path
+- Maintained compatibility with viper config file detection
+
+# Move Config Command to Glazed Package
+
+Created a reusable config command in the glazed package:
+- Moved config command implementation to glazed/pkg/config/cobra-config-command.go
+- Made command binary-agnostic by taking app name as parameter
+- Updated sqleton and pinocchio to use the new reusable command
+- Maintained all existing functionality while reducing code duplication
+
+# Update Pinocchio Config Command
+
+Updated pinocchio to use the reusable config command from glazed:
+- Removed local config command implementation
+- Switched to using glazed's NewConfigCommand
+- Maintained all existing functionality including repositories subcommand
+- Reduced code duplication while ensuring consistent behavior
+
+# Add Show Command to Config Editor
+
+Added a new show command to display the configuration file contents:
+- Added show command to display raw config file contents
+- Shows file path and contents
+- Handles non-existent config files gracefully
+
+# Add Path Command to Config Editor
+
+Added a new path command to show and set the configuration file path:
+- Added path command to display current config file path
+- Added --set flag to change the config file location
+- Automatically copies existing config when changing path
+- Creates parent directories as needed
+
+## Improved Logging in Command Filtering
+
+Replaced fmt.Printf statements with structured logging using zerolog.Debug() in the command filtering system for better debugging capabilities.
+
+- Replaced fmt.Printf with log.Debug() in command document creation
+- Updated logging in command index creation and search operations
+- Improved logging in path filtering operations with structured fields
+
+## Tool Provider Middleware Implementation
+
+Implemented a flexible middleware system for tool providers with builder pattern and abstracted metrics collection.
+
+- Removed global middleware configuration in favor of per-middleware builders
+- Created metrics collector interface for pluggable metrics implementations
+- Implemented logging middleware with configurable options
+- Added NoopMetricsCollector as default metrics implementation

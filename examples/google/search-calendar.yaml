@@ -1,0 +1,38 @@
+name: search-calendar
+short: Search for calendar events
+long: |
+  Performs a case-insensitive search for calendar events.
+  Can search within a specific date range.
+
+flags:
+  - name: text
+    type: string
+    help: Search text to find in events
+    required: true
+
+  - name: start
+    type: string
+    help: Start date/time for search range (e.g. 'today', '2024-03-25')
+    default: "today"
+
+  - name: end
+    type: string
+    help: End date/time for search range
+
+capture-stderr: true  # Capture stderr in command output
+shell-script: |
+  #!/bin/bash
+  set -euo pipefail
+
+  # Build the base command
+  CMD=(/home/manuel/.pyenv/shims/gcalcli --client-id=896454085119-nbeos58qcqacirt8v04prnjsdlq31dff.apps.googleusercontent.com search --calendar "manuel@mento.co")
+
+  # Add required search text and date range
+  CMD+=("{{ .Args.text }}" "{{ .Args.start }}")
+  {{ if .Args.end }}
+  CMD+=("{{ .Args.end }}")
+  {{ end }}
+
+  # Execute the command
+  echo "DEBUG: Executing: ${CMD[@]}"
+  "${CMD[@]}" 

@@ -1,0 +1,34 @@
+version: "1"
+defaultProfile: all
+
+profiles:
+  all:
+    description: "Load all available tools (GitHub and Google)"
+    tools:
+      directories:
+        - path: /home/manuel/code/wesen/corporate-headquarters/go-go-mcp/examples/github
+          defaults:
+            default:
+              debug: false
+        - path: /home/manuel/code/wesen/corporate-headquarters/go-go-mcp/examples/google
+          defaults:
+            default:
+              debug: false
+
+  github:
+    description: "GitHub tools only"
+    tools:
+      directories:
+        - path: /home/manuel/code/wesen/corporate-headquarters/go-go-mcp/examples/github
+          defaults:
+            default:
+              debug: false
+
+  google:
+    description: "Google tools only"
+    tools:
+      directories:
+        - path: /home/manuel/code/wesen/corporate-headquarters/go-go-mcp/examples/google
+          defaults:
+            default:
+              debug: false 

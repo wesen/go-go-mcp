@@ -1,0 +1,121 @@
+name: add-calendar-event
+short: Add a new event to Google Calendar
+long: |
+  Adds a new event to Google Calendar using gcalcli.
+  If required information is missing and --noprompt is not set,
+  it will interactively prompt for the remaining data.
+
+flags:
+  - name: title
+    type: string
+    help: Event title
+    required: true
+
+  - name: when
+    type: string
+    help: Event time (e.g. '2024-03-25 15:00')
+    required: true
+
+  - name: duration
+    type: string
+    help: Event duration in minutes (or days if --allday is set)
+    default: "60"
+
+  - name: end
+    type: string
+    help: Event ending time (alternative to --duration)
+
+  - name: description
+    type: string
+    help: Event description
+
+  - name: where
+    type: string
+    help: Event location
+
+  - name: who
+    type: stringList
+    help: Event participants (can specify multiple)
+
+  - name: reminder
+    type: stringList
+    help: Reminders in format 'TIME METH' or 'TIME' (e.g. '10m popup', '1h email')
+
+  - name: color
+    type: choice
+    help: Color of event in browser
+    choices: [lavender, sage, grape, flamingo, banana, tangerine, peacock, graphite, blueberry, basil, tomato]
+
+  - name: allday
+    type: bool
+    help: Set as an all-day event
+    default: false
+
+  - name: noprompt
+    type: bool
+    help: Don't prompt for missing data
+    default: true
+
+  - name: default_reminders
+    type: bool
+    help: Use default reminders if none specified
+    default: true
+
+capture-stderr: true  # Capture stderr in command output
+shell-script: |
+  #!/bin/bash
+  set -euo pipefail
+
+  echo HELLO
+
+  # Build the base command
+  CMD=(/home/manuel/.pyenv/shims/gcalcli --client-id=896454085119-nbeos58qcqacirt8v04prnjsdlq31dff.apps.googleusercontent.com add --calendar "manuel@mento.co")
+
+  # Add required arguments
+  CMD+=(--title "{{ .Args.title }}" --when "{{ .Args.when }}")
+
+  # Handle duration vs end time
+  {{ if .Args.end }}
+  CMD+=(--end "{{ .Args.end }}")
+  {{ else }}
+  CMD+=(--duration "{{ .Args.duration }}")
+  {{ end }}
+
+  echo HELLO
+
+
+  # Add optional arguments if provided
+  {{ if .Args.description }}
+  CMD+=(--description "{{ .Args.description }}")
+  {{ end }}
+  {{ if .Args.where }}
+  CMD+=(--where "{{ .Args.where }}")
+  {{ end }}
+  {{ if .Args.color }}
+  CMD+=(--color "{{ .Args.color }}")
+  {{ end }}
+  {{ if .Args.allday }}
+  CMD+=(--allday)
+  {{ end }}
+  {{ if .Args.noprompt }}
+  CMD+=(--noprompt)
+  {{ end }}
+  {{ if not .Args.default_reminders }}
+  CMD+=(--no-default-reminders)
+  {{ end }}
+
+  echo HELLO
+
+  # Add multiple attendees if provided
+  {{ range .Args.who }}
+  CMD+=(--who "{{ . }}")
+  {{ end }}
+
+  # Add multiple reminders if provided
+  {{ range .Args.reminder }}
+  CMD+=(--reminder "{{ . }}")
+  {{ end }}
+
+  # Execute the command
+  echo "DEBUG: Executing: ${CMD[@]}"
+  "${CMD[@]}" 

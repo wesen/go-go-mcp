@@ -1,4 +1,24 @@
-I'll help you write a comprehensive tutorial on using middlewares for parameter parsing in Glazed. Let me break this down into clear sections with examples.
+---
+Title: Parameter Parsing with Glazed Middlewares
+Slug: parameter-parsing-middlewares
+Short: A practical tutorial on using Glazed's middleware system to handle command parameters
+Topics:
+- middlewares
+- parameters
+- tutorials
+- parsing
+Commands:
+- ExecuteMiddlewares
+- SetFromDefaults
+- UpdateFromMap
+- UpdateFromMapAsDefault
+Flags:
+- none
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: Tutorial
+---
 
 # Tutorial: Parameter Parsing with Glazed Middlewares
 

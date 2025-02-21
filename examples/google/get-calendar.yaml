@@ -1,0 +1,25 @@
+name: get-calendar
+short: Get calendar agenda from Google Calendar
+long: |
+  Retrieves calendar events from Google Calendar using gcalcli.
+  Shows events between start and end dates for the specified calendar.
+
+flags:
+  - name: start
+    type: string
+    help: Start date (e.g. today, tomorrow, '2024-03-20')
+    default: today
+  - name: end
+    type: string
+    help: End date or duration (e.g. '10 days', '2024-03-30')
+    default: 10 days
+
+capture-stderr: true  # Capture stderr in command output
+command:
+  - /home/manuel/.pyenv/shims/gcalcli
+  - --client-id=896454085119-nbeos58qcqacirt8v04prnjsdlq31dff.apps.googleusercontent.com
+  - agenda
+  - --calendar
+  - manuel@mento.co
+  - "{{ .Args.start }}"
+  - "{{ .Args.end }}"
