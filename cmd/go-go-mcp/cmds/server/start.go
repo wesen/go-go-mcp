@@ -68,7 +68,7 @@ Available transports:
 				parameters.NewParameterDefinition(
 					"internal-servers",
 					parameters.ParameterTypeStringList,
-					parameters.WithHelp("List of internal servers to register (comma-separated). Available: sqlite,fetch,echo"),
+					parameters.WithHelp("List of internal servers to register (comma-separated). Available: sqlite,fetch,echo,libgen"),
 					parameters.WithDefault([]string{}),
 				),
 			),
@@ -101,6 +101,12 @@ func registerInternalServers(registry *tool_registry.Registry, serverList []stri
 	if serversMap["echo"] {
 		if err := examples.RegisterEchoTool(registry); err != nil {
 			return errors.Wrap(err, "failed to register echo tool")
+		}
+	}
+
+	if serversMap["libgen"] {
+		if err := examples.RegisterLibGenTools(registry); err != nil {
+			return errors.Wrap(err, "failed to register libgen tools")
 		}
 	}
 
