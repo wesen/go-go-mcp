@@ -1,0 +1,62 @@
+name: "Sampling Demo MCP Server"
+description: "Demonstrates Anthropic MCP sampling capabilities"
+version: "1.0.0"
+
+tools:
+  - name: "analyze_text"
+    description: "Analyze text using LLM sampling for sentiment, tone, or other analysis"
+    parameters:
+      type: object
+      properties:
+        text:
+          type: string
+          description: "The text to analyze"
+        analysis_type:
+          type: string
+          description: "Type of analysis: sentiment, tone, readability, etc."
+          default: "sentiment"
+      required:
+        - text
+
+  - name: "summarize_content"
+    description: "Summarize content using LLM sampling"
+    parameters:
+      type: object
+      properties:
+        content:
+          type: string
+          description: "The content to summarize"
+        length:
+          type: string
+          description: "Summary length: short, medium, or long"
+          enum: ["short", "medium", "long"]
+          default: "medium"
+      required:
+        - content
+
+  - name: "conversation"
+    description: "Engage in conversation using LLM sampling"
+    parameters:
+      type: object
+      properties:
+        messages:
+          type: array
+          description: "Array of conversation messages"
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                description: "Message role: user or assistant"
+                enum: ["user", "assistant"]
+              text:
+                type: string
+                description: "Message text content"
+            required:
+              - role
+              - text
+      required:
+        - messages
+
+resources: []
+prompts: []

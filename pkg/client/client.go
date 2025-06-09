@@ -358,31 +358,19 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments map[string
 }
 
 // CreateMessage sends a sampling request to create a message
-func (c *Client) CreateMessage(ctx context.Context, messages []protocol.Message, modelPreferences protocol.ModelPreferences, systemPrompt string, maxTokens int) (*protocol.Message, error) {
+func (c *Client) CreateMessage(ctx context.Context, request protocol.CreateMessageRequest) (*protocol.CreateMessageResponse, error) {
 	if !c.initialized {
 		return nil, fmt.Errorf("client not initialized")
 	}
 
-	params := struct {
-		Messages         []protocol.Message        `json:"messages"`
-		ModelPreferences protocol.ModelPreferences `json:"modelPreferences"`
-		SystemPrompt     string                    `json:"systemPrompt,omitempty"`
-		MaxTokens        int                       `json:"maxTokens,omitempty"`
-	}{
-		Messages:         messages,
-		ModelPreferences: modelPreferences,
-		SystemPrompt:     systemPrompt,
-		MaxTokens:        maxTokens,
-	}
-
-	request := &protocol.Request{
+	jsonRequest := &protocol.Request{
 		JSONRPC: "2.0",
 		Method:  "sampling/createMessage",
-		Params:  mustMarshal(params),
+		Params:  mustMarshal(request),
 	}
-	c.setRequestID(request)
+	c.setRequestID(jsonRequest)
 
-	response, err := c.transport.Send(ctx, request)
+	response, err := c.transport.Send(ctx, jsonRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send sampling/createMessage request: %w", err)
 	}
@@ -391,7 +379,7 @@ func (c *Client) CreateMessage(ctx context.Context, messages []protocol.Message,
 		return nil, fmt.Errorf("server returned error: %s", response.Error.Message)
 	}
 
-	var result protocol.Message
+	var result protocol.CreateMessageResponse
 	if err := json.Unmarshal(response.Result, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal sampling/createMessage result: %w", err)
 	}

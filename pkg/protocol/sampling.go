@@ -25,15 +25,19 @@ type ModelPreferences struct {
 
 // ModelHint represents a suggested model name
 type ModelHint struct {
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 }
 
 // CreateMessageRequest represents a request to create a message
 type CreateMessageRequest struct {
-	Messages         []Message        `json:"messages"`
-	ModelPreferences ModelPreferences `json:"modelPreferences,omitempty"`
-	SystemPrompt     string           `json:"systemPrompt,omitempty"`
-	MaxTokens        int              `json:"maxTokens,omitempty"`
+	Messages         []Message                  `json:"messages"`
+	ModelPreferences *ModelPreferences          `json:"modelPreferences,omitempty"`
+	SystemPrompt     string                     `json:"systemPrompt,omitempty"`
+	IncludeContext   string                     `json:"includeContext,omitempty"` // "none", "thisServer", "allServers"
+	Temperature      *float64                   `json:"temperature,omitempty"`
+	MaxTokens        int                        `json:"maxTokens"`
+	StopSequences    []string                   `json:"stopSequences,omitempty"`
+	Metadata         map[string]interface{}     `json:"metadata,omitempty"`
 }
 
 // CreateMessageResponse represents the response to a create message request
@@ -42,4 +46,10 @@ type CreateMessageResponse struct {
 	Content    MessageContent `json:"content"`
 	Model      string         `json:"model,omitempty"`
 	StopReason string         `json:"stopReason,omitempty"`
+}
+
+// SamplingClient represents the interface for clients that support sampling
+type SamplingClient interface {
+	// CreateMessage requests the client to create a message using LLM sampling
+	CreateMessage(request CreateMessageRequest) (*CreateMessageResponse, error)
 }
