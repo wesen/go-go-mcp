@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/go-go-golems/go-go-mcp/pkg/protocol"
 	"github.com/go-go-golems/go-go-mcp/pkg/server"
+	"github.com/go-go-golems/go-go-mcp/pkg/tools"
+	"github.com/go-go-golems/go-go-mcp/pkg/tools/providers/tool-registry"
 	"github.com/go-go-golems/go-go-mcp/pkg/transport"
 	"github.com/go-go-golems/go-go-mcp/pkg/transport/stdio"
 	"github.com/rs/zerolog"
@@ -21,7 +24,15 @@ type SamplingDemoServer struct {
 
 // NewSamplingDemoServer creates a new demo server with sampling capabilities
 func NewSamplingDemoServer(logger zerolog.Logger, transport transport.Transport, samplingProvider server.SamplingProvider) *SamplingDemoServer {
-	baseServer := server.NewServer(logger, transport)
+	// Create tool registry
+	toolRegistry := tool_registry.NewRegistry()
+	
+	// Create base server with tool provider
+	baseServer := server.NewServer(logger, transport,
+		server.WithToolProvider(toolRegistry),
+		server.WithServerName("Sampling Demo Server"),
+		server.WithServerVersion("1.0.0"),
+	)
 	
 	demo := &SamplingDemoServer{
 		Server:   baseServer,
@@ -29,23 +40,114 @@ func NewSamplingDemoServer(logger zerolog.Logger, transport transport.Transport,
 	}
 
 	// Register our custom tools
-	demo.registerTools()
+	demo.registerTools(toolRegistry)
 	
 	return demo
 }
 
-func (s *SamplingDemoServer) registerTools() {
-	// Register tools that use sampling to analyze text
-	_ = &AnalyzeTextTool{sampling: s.sampling}
-	_ = &SummarizerTool{sampling: s.sampling}
-	_ = &ConversationTool{sampling: s.sampling}
-	// Note: These would need to be properly registered with the tool provider
-	// For now, this is just demonstrating the structure
+func (s *SamplingDemoServer) registerTools(registry *tool_registry.Registry) {
+	// Register the text analysis tool
+	analyzeTextTool, err := NewAnalyzeTextTool(s.sampling)
+	if err != nil {
+		log.Printf("Failed to create analyze text tool: %v", err)
+		return
+	}
+	registry.RegisterTool(analyzeTextTool)
+	
+	// Register the summarizer tool
+	summarizerTool, err := NewSummarizerTool(s.sampling)
+	if err != nil {
+		log.Printf("Failed to create summarizer tool: %v", err)
+		return
+	}
+	registry.RegisterTool(summarizerTool)
+	
+	// Register the conversation tool
+	conversationTool, err := NewConversationTool(s.sampling)
+	if err != nil {
+		log.Printf("Failed to create conversation tool: %v", err)
+		return
+	}
+	registry.RegisterTool(conversationTool)
 }
 
 // AnalyzeTextTool demonstrates a tool that uses sampling
 type AnalyzeTextTool struct {
+	*tools.ToolImpl
 	sampling *server.SamplingServer
+}
+
+// NewAnalyzeTextTool creates a new text analysis tool
+func NewAnalyzeTextTool(sampling *server.SamplingServer) (*AnalyzeTextTool, error) {
+	schema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"text": map[string]interface{}{
+				"type":        "string",
+				"description": "The text to analyze",
+			},
+			"analysis_type": map[string]interface{}{
+				"type":        "string",
+				"description": "Type of analysis: sentiment, tone, readability, etc.",
+				"default":     "sentiment",
+			},
+		},
+		"required": []string{"text"},
+	}
+	
+	impl, err := tools.NewToolImpl(
+		"analyze_text",
+		"Analyze text using LLM sampling for sentiment, tone, or other analysis",
+		schema,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &AnalyzeTextTool{
+		ToolImpl: impl,
+		sampling: sampling,
+	}, nil
+}
+
+// Call implements the Tool interface
+func (t *AnalyzeTextTool) Call(ctx context.Context, arguments map[string]interface{}) (*protocol.ToolResult, error) {
+	result, err := t.Execute(ctx, arguments)
+	if err != nil {
+		return &protocol.ToolResult{
+			Content: []protocol.ToolContent{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("Error: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+	
+	// Convert result to JSON string
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return &protocol.ToolResult{
+			Content: []protocol.ToolContent{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("Error marshaling result: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+	
+	return &protocol.ToolResult{
+		Content: []protocol.ToolContent{
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+		IsError: false,
+	}, nil
 }
 
 // Execute analyzes text using LLM sampling
@@ -85,7 +187,82 @@ func (t *AnalyzeTextTool) Execute(ctx context.Context, args map[string]interface
 
 // SummarizerTool demonstrates another sampling use case
 type SummarizerTool struct {
+	*tools.ToolImpl
 	sampling *server.SamplingServer
+}
+
+// NewSummarizerTool creates a new summarizer tool
+func NewSummarizerTool(sampling *server.SamplingServer) (*SummarizerTool, error) {
+	schema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"content": map[string]interface{}{
+				"type":        "string",
+				"description": "The content to summarize",
+			},
+			"length": map[string]interface{}{
+				"type":        "string",
+				"description": "Summary length: short, medium, or long",
+				"enum":        []string{"short", "medium", "long"},
+				"default":     "medium",
+			},
+		},
+		"required": []string{"content"},
+	}
+	
+	impl, err := tools.NewToolImpl(
+		"summarize_content",
+		"Summarize content using LLM sampling",
+		schema,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &SummarizerTool{
+		ToolImpl: impl,
+		sampling: sampling,
+	}, nil
+}
+
+// Call implements the Tool interface
+func (t *SummarizerTool) Call(ctx context.Context, arguments map[string]interface{}) (*protocol.ToolResult, error) {
+	result, err := t.Execute(ctx, arguments)
+	if err != nil {
+		return &protocol.ToolResult{
+			Content: []protocol.ToolContent{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("Error: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+	
+	// Convert result to JSON string
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return &protocol.ToolResult{
+			Content: []protocol.ToolContent{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("Error marshaling result: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+	
+	return &protocol.ToolResult{
+		Content: []protocol.ToolContent{
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+		IsError: false,
+	}, nil
 }
 
 func (t *SummarizerTool) Execute(ctx context.Context, args map[string]interface{}) (interface{}, error) {
@@ -138,7 +315,91 @@ func (t *SummarizerTool) Execute(ctx context.Context, args map[string]interface{
 
 // ConversationTool demonstrates multi-turn sampling
 type ConversationTool struct {
+	*tools.ToolImpl
 	sampling *server.SamplingServer
+}
+
+// NewConversationTool creates a new conversation tool
+func NewConversationTool(sampling *server.SamplingServer) (*ConversationTool, error) {
+	schema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"messages": map[string]interface{}{
+				"type":        "array",
+				"description": "Array of conversation messages",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"role": map[string]interface{}{
+							"type":        "string",
+							"description": "Message role: user or assistant",
+							"enum":        []string{"user", "assistant"},
+						},
+						"text": map[string]interface{}{
+							"type":        "string",
+							"description": "Message text content",
+						},
+					},
+					"required": []string{"role", "text"},
+				},
+			},
+		},
+		"required": []string{"messages"},
+	}
+	
+	impl, err := tools.NewToolImpl(
+		"conversation",
+		"Engage in conversation using LLM sampling",
+		schema,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &ConversationTool{
+		ToolImpl: impl,
+		sampling: sampling,
+	}, nil
+}
+
+// Call implements the Tool interface
+func (t *ConversationTool) Call(ctx context.Context, arguments map[string]interface{}) (*protocol.ToolResult, error) {
+	result, err := t.Execute(ctx, arguments)
+	if err != nil {
+		return &protocol.ToolResult{
+			Content: []protocol.ToolContent{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("Error: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+	
+	// Convert result to JSON string
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return &protocol.ToolResult{
+			Content: []protocol.ToolContent{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("Error marshaling result: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+	
+	return &protocol.ToolResult{
+		Content: []protocol.ToolContent{
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+		IsError: false,
+	}, nil
 }
 
 func (t *ConversationTool) Execute(ctx context.Context, args map[string]interface{}) (interface{}, error) {

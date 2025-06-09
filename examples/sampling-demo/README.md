@@ -35,34 +35,83 @@ This demo implements three tools that demonstrate different aspects of sampling:
 ### Running the Demo Server
 
 ```bash
-# Build and run the demo
-go run examples/sampling-demo/main.go
+# Build the demo
+cd examples/sampling-demo
+go build -o sampling-demo .
+
+# Run the demo server
+./sampling-demo
 ```
 
-### Example Tool Calls
+The server will start with stdio transport and register three MCP tools that use sampling.
+
+### Testing the Tools
 
 ```bash
-# Analyze text sentiment
-go-go-mcp client tools call analyze_text --args '{
-  "text": "I love this new feature!",
-  "analysis_type": "sentiment"
-}'
-
-# Summarize content
-go-go-mcp client tools call summarize_content --args '{
-  "content": "Long article content here...",
-  "length": "short"
-}'
-
-# Have a conversation
-go-go-mcp client tools call conversation --args '{
-  "messages": [
-    {"role": "user", "text": "Hello, how are you?"},
-    {"role": "assistant", "text": "I'm doing well, thank you!"},
-    {"role": "user", "text": "What can you help me with?"}
-  ]
-}'
+# Test compilation and tool registration
+./test_sampling.sh
 ```
+
+### Available Tools
+
+The demo server registers these tools with the MCP protocol:
+
+1. **`analyze_text`** - Analyze text for sentiment, tone, or other characteristics
+2. **`summarize_content`** - Summarize content with configurable length
+3. **`conversation`** - Engage in multi-turn conversations
+
+### Example MCP Client Usage
+
+Using an MCP client (like the [MCP Inspector](https://github.com/modelcontextprotocol/inspector)):
+
+```bash
+# Install MCP Inspector
+npm install -g @modelcontextprotocol/inspector
+
+# Test the server
+mcp-inspector ./sampling-demo
+```
+
+### Direct Protocol Examples
+
+**List available tools:**
+```json
+{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+```
+
+**Call the text analysis tool:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "analyze_text",
+    "arguments": {
+      "text": "I love this new feature!",
+      "analysis_type": "sentiment"
+    }
+  }
+}
+```
+
+**Call the summarizer tool:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "summarize_content",
+    "arguments": {
+      "content": "Long article content here...",
+      "length": "short"
+    }
+  }
+}
+```
+
+For detailed usage examples, see [demo_usage.md](demo_usage.md).
 
 ## Sampling Request Examples
 
